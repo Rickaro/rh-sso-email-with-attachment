@@ -21,26 +21,31 @@ import javax.mail.internet.MimeMultipart;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.BufferedReader;
+import java.io.BufferedInputStream;
 import java.io.UnsupportedEncodingException;
+import java.util.stream.Collectors;
+import java.nio.charset.StandardCharsets;
 import java.net.URL;
+import java.net.URLConnection;
+import java.net.FileNameMap;
 import java.nio.file.Files;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.Map;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @JBossLog
 public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
     private final KeycloakSession session;
 
-    private String include;
-    private Boolean parent;
-
-    public EmailWithAttachmentSenderProvider(KeycloakSession session, String include, Boolean parent) {
+    public EmailWithAttachmentSenderProvider(KeycloakSession session) {
         this.session = session;
-        this.include = include;
-        this.parent = parent;
     }
 
     @Override
@@ -102,7 +107,15 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
                 MimeBodyPart htmlPart = new MimeBodyPart();
                 htmlPart.setContent(htmlBody, "text/html; charset=UTF-8");
                 multipart.addBodyPart(htmlPart);
-                addResources(multipart, config);
+               
+	        Theme theme = this.session.theme().getTheme(Theme.Type.EMAIL); 
+
+                final Matcher m = Pattern.compile("(?s)(\\\"cid:([^\\\"]+)\\\")(?!.*\\1.*)").matcher(htmlBody);
+                while (m.find()) {
+                   String attach = m.group(2);
+                   log.warn("Cid found: " + attach); 
+                   addResource(multipart, theme, attach);
+                }
             }
 
             SMTPMessage msg = new SMTPMessage(session);
@@ -175,51 +188,43 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
 
     }
 
-    private void addAttachment(Multipart multipart, String path) {
-        MimeBodyPart htmlPart = new MimeBodyPart();
-        DataSource source = new FileDataSource(path);
-        String fileName=new File(path).toPath().getFileName().toString();
+    private void addAttachment(Multipart multipart, Theme theme, String path, String contentId) {
+        log.debug("addAttachment:" + path);
+
         try {
-            htmlPart.setDataHandler(new DataHandler(source));
+          String fileName = new File(path).toPath().getFileName().toString();
+          log.debug("addAttachment filename:" + fileName + ", path: " + path);
+
+          InputStream is = theme.getResourceAsStream(path);
+
+          if (is == null) {
+            log.warn("Attach stream is null: " + path);
+          } else {
+            MimeBodyPart htmlPart = new MimeBodyPart();
+            htmlPart.setDataHandler(new DataHandler(new InputStreamDataSource( is, fileName )));
+
             htmlPart.setFileName(fileName);
-            htmlPart.setHeader("Content-ID", "<" + fileName + ">");
+            htmlPart.setHeader("Content-ID", "<" + contentId + ">");
             htmlPart.setDisposition(MimeBodyPart.INLINE);
-            htmlPart.attachFile(path);
             multipart.addBodyPart(htmlPart);
+          }
         } catch (MessagingException | IOException e) {
             log.warn("Failed to attach file: " + path, e);
         }
     }
 
-    private void addResources(Multipart multipart, Map<String, String> config) {
-        if (include != null) {
-            try {
-                String imagesPath = getResourcePath(include);
-                if (parent) {
-                    Files.list(new File(imagesPath).getParentFile().toPath()).forEach((i) -> addAttachment(multipart, i.toString())
-                    );
-                } else {
-                    addAttachment(multipart, imagesPath);
-                }
-            } catch (IOException me) {
-                log.warn("Failed to attach files", me);
-            }
+    private void addResource(Multipart multipart, Theme theme, String contentId) {
+        try {
+          Properties properties = theme.getProperties();
 
+          String path = properties.getProperty("attach_" + contentId);
+          if (path != null) {
+              addAttachment(multipart, theme, path, contentId);
+          } else {
+            log.warn("Propertie attach_" + contentId + " not found in theme");
+          }
+        } catch (IOException e) {
+            log.warn("Failed to get theme properties", e);
         }
     }
-
-    private String getResourcePath(String resPath) throws IOException {
-        /*
-         * We have to locate the resource path to embed images in the email.
-         * Resource path can be obtain from the theme.
-         */
-        String emailTheme = session.getContext().getRealm().getEmailTheme();
-        ThemeProvider themeProvider = session.getProvider(ThemeProvider.class, "extending");
-        Theme theme = themeProvider.getTheme(emailTheme, Theme.Type.EMAIL);
-        URL relativePath = theme.getResource(resPath);
-        if (relativePath == null) throw new IOException("");
-        return relativePath.getPath();
-    }
-
-
 }

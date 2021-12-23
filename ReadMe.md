@@ -51,10 +51,6 @@ Create a JBoss module:
 <spi name="emailSender">
     <default-provider>emailwithattachment</default-provider>
     <provider name="emailwithattachment" enabled="true">
-        <properties>
-            <property name="include" value="img/logo.png"/>
-            <property name="parent" value="true"/>
-        </properties>
     </provider>
 </spi>
 ```
@@ -66,10 +62,14 @@ Create a JBoss module:
 /subsystem=keycloak-server/spi=emailSender/:add
 /subsystem=keycloak-server/spi=emailSender/:write-attribute(name=default-provider,value=emailwithattachment)
 /subsystem=keycloak-server/spi=emailSender/provider=emailwithattachment/:add(enabled=true)
-/subsystem=keycloak-server/spi=emailSender/provider=emailwithattachment/:write-attribute(name=properties,value={"include" => "img/logo.png","parent" => "true"})
 ```
 
 ## Release Notes
+
+### 0.0.2
+
+* file attachment
+* configuration moved to theme.properties
 
 ### 0.0.1
 
@@ -79,4 +79,5 @@ Create a JBoss module:
 ## Author
 
 Sylvain M. for [Lyra](https://lyra.com).
+Rickaro
 
