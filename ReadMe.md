@@ -1,6 +1,8 @@
 # RH-SSO email with attachment providers
 
 This RH-SSO email provider is able to attach files in email. 
+Provider search "cid:content-id" string in htmlBody, and if found, then try to get property from theme.properties
+attach_<content-id>. If such property defined, provider try to get resource from theme and inline-attach it to email
 
 ## Versioning
 
@@ -64,6 +66,26 @@ Create a JBoss module:
 /subsystem=keycloak-server/spi=emailSender/provider=emailwithattachment/:add(enabled=true)
 ```
 
+### `in theme template`
+```html
+<img src="cid:logo" width="128" height="128" alt="Company Logo" />
+```
+
+### `theme.properties`
+```
+attach_logo=img/logo.png
+```
+
+### `Theme dir`
+```
+ email
+ ├── html
+ │    └─ password-reset.ftl
+ ├── resources
+ │    └─ img
+ │        └─ logo.png
+ └──theme.resources
+```
 ## Release Notes
 
 ### 0.0.2
