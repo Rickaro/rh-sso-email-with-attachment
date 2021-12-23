@@ -10,28 +10,27 @@ import java.io.ByteArrayInputStream;
 
 
 public class InputStreamDataSource implements DataSource {
-    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    private Boolean fistRead;
     private final String name;
+    private final InputStream inputStream1;
+    private final InputStream inputStream2;
 
-    public InputStreamDataSource(InputStream inputStream, String name) {
+    public InputStreamDataSource(InputStream inputStream1, InputStream inputStream2, String name) {
 	this.name = name;
-        try {
-            int nRead;
-            byte[] data = new byte[16384];
-            while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
-                buffer.write(data, 0, nRead);
-            }
-
-            buffer.flush();
-            inputStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        this.fistRead = true;
+        this.inputStream1 = inputStream1;
+        this.inputStream2 = inputStream2;
     }
 
     @Override
     public InputStream getInputStream() throws IOException {
-        return new ByteArrayInputStream(buffer.toByteArray());
+        if (this.fistRead) {
+           this.fistRead = false;
+           return this.inputStream1;
+        } 
+
+        this.inputStream1.close();
+        return this.inputStream2;
     }
 
     @Override

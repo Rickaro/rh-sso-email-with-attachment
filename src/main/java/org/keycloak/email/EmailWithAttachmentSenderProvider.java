@@ -108,7 +108,7 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
                 htmlPart.setContent(htmlBody, "text/html; charset=UTF-8");
                 multipart.addBodyPart(htmlPart);
                
-	        Theme theme = this.session.theme().getTheme(Theme.Type.EMAIL); 
+	            Theme theme = this.session.theme().getTheme(Theme.Type.EMAIL); 
 
                 final Matcher m = Pattern.compile("(?s)(\\\"cid:([^\\\"]+)\\\")(?!.*\\1.*)").matcher(htmlBody);
                 while (m.find()) {
@@ -191,17 +191,19 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
     private void addAttachment(Multipart multipart, Theme theme, String path, String contentId) {
         log.debug("addAttachment:" + path);
 
+        // Open stream twice so javax.mailer can get content type
         try {
           String fileName = new File(path).toPath().getFileName().toString();
           log.debug("addAttachment filename:" + fileName + ", path: " + path);
 
-          InputStream is = theme.getResourceAsStream(path);
+          InputStream is1 = theme.getResourceAsStream(path);
+          InputStream is2 = theme.getResourceAsStream(path);
 
-          if (is == null) {
+          if (is1 == null || is2 == null) {
             log.warn("Attach stream is null: " + path);
           } else {
             MimeBodyPart htmlPart = new MimeBodyPart();
-            htmlPart.setDataHandler(new DataHandler(new InputStreamDataSource( is, fileName )));
+            htmlPart.setDataHandler(new DataHandler(new InputStreamDataSource( is1, is2, fileName )));
 
             htmlPart.setFileName(fileName);
             htmlPart.setHeader("Content-ID", "<" + contentId + ">");

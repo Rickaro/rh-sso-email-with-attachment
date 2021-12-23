@@ -88,10 +88,16 @@ attach_logo=img/logo.png
 ```
 ## Release Notes
 
+### 0.0.3
+
+* Replace ByteArrayOutputStream with twice InputStream in DataSource
+
 ### 0.0.2
 
-* file attachment
 * configuration moved to theme.properties
+* file attached only if cid record found in htmlTemplate
+* change method to obtain attachment content to support jar theme providers
+* remove "attach all files in dir" feature
 
 ### 0.0.1
 
