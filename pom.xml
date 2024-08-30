@@ -7,57 +7,53 @@
     <maven.compiler.target>1.8</maven.compiler.target>
     <maven.deploy.skip>true</maven.deploy.skip>
     <maven.install.skip>true</maven.install.skip>
+    <version.keycloak>25.0.1</version.keycloak>
+    <version.org.jboss.logging>3.4.1.Final</version.org.jboss.logging>
+    <version.org.projectlombok>1.18.22</version.org.projectlombok>
 </properties>
 
     <groupId>com.lyra.idm.keycloak</groupId>
     <artifactId>email</artifactId>
-    <version>0.0.3-SNAPSHOT</version>
+    <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
-    <name>RH-SSO email</name>
+    <name>RH-SSO email attach</name>
 
     <dependencies>
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-common</artifactId>
-            <version>15.0.2</version>
-            <scope>provided</scope>
+            <version>${version.keycloak}</version>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-services</artifactId>
-            <version>15.0.2</version>
-            <scope>provided</scope>
+            <version>${version.keycloak}</version>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-core</artifactId>
-            <version>15.0.2</version>
-            <scope>provided</scope>
+            <version>${version.keycloak}</version>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-server-spi</artifactId>
-            <version>15.0.2</version>
-            <scope>provided</scope>
+            <version>${version.keycloak}</version>
         </dependency>
         <dependency>
             <groupId>org.jboss.logging</groupId>
             <artifactId>jboss-logging</artifactId>
-            <version>3.4.1.Final</version>
-            <scope>provided</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <scope>provided</scope>
-	    <version>1.18.22</version>
+            <version>${version.org.jboss.logging}</version>
         </dependency>
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-server-spi-private</artifactId>
-            <version>15.0.2</version>
-            <scope>provided</scope>
+            <version>${version.keycloak}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${version.org.projectlombok}</version>
         </dependency>
     </dependencies>
 
