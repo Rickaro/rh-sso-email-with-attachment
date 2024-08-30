@@ -1,14 +1,15 @@
 package org.keycloak.email;
 
 import com.sun.mail.smtp.SMTPMessage;
-import lombok.extern.jbosslog.JBossLog;
+import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.UserModel;
 import org.keycloak.services.ServicesLogger;
 import org.keycloak.theme.Theme;
 import org.keycloak.theme.ThemeProvider;
-import org.keycloak.truststore.HostnameVerificationPolicy;
+import org.keycloak.common.enums.HostnameVerificationPolicy;
 import org.keycloak.truststore.JSSETruststoreConfigurator;
+import org.keycloak.vault.VaultStringSecret;
 
 import javax.activation.DataHandler;
 import javax.activation.DataSource;
@@ -18,6 +19,7 @@ import javax.mail.internet.AddressException;
 import javax.mail.internet.InternetAddress;
 import javax.mail.internet.MimeBodyPart;
 import javax.mail.internet.MimeMultipart;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.File;
 import java.io.IOException;
@@ -40,8 +42,12 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@JBossLog
+import static org.keycloak.utils.StringUtil.isNotBlank;
+
 public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
+    private static final Logger logger = Logger.getLogger(DefaultEmailSenderProvider.class);
+    private static final String SUPPORTED_SSL_PROTOCOLS = getSupportedSslProtocols();
+
     private final KeycloakSession session;
 
     public EmailWithAttachmentSenderProvider(KeycloakSession session) {
@@ -50,9 +56,13 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
 
     @Override
     public void send(Map<String, String> config, UserModel user, String subject, String textBody, String htmlBody) throws EmailException {
+        send(config, retrieveEmailAddress(user), subject, textBody, htmlBody);
+    }
+
+    @Override
+    public void send(Map<String, String> config, String address, String subject, String textBody, String htmlBody) throws EmailException {
         Transport transport = null;
         try {
-            String address = retrieveEmailAddress(user);
 
             Properties props = new Properties();
 
@@ -80,7 +90,9 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
                 props.setProperty("mail.smtp.starttls.enable", "true");
             }
 
-            if (ssl || starttls) {
+	    if (ssl || starttls || auth){
+                props.put("mail.smtp.ssl.protocols", SUPPORTED_SSL_PROTOCOLS);
+
                 setupTruststore(props);
             }
 
@@ -108,12 +120,12 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
                 htmlPart.setContent(htmlBody, "text/html; charset=UTF-8");
                 multipart.addBodyPart(htmlPart);
                
-	            Theme theme = this.session.theme().getTheme(Theme.Type.EMAIL); 
+                Theme theme = this.session.theme().getTheme(Theme.Type.EMAIL); 
 
                 final Matcher m = Pattern.compile("(?s)(\\\"cid:([^\\\"]+)\\\")(?!.*\\1.*)").matcher(htmlBody);
                 while (m.find()) {
                    String attach = m.group(2);
-                   log.warn("Cid found: " + attach); 
+                   logger.warn("Cid found: " + attach); 
                    addResource(multipart, theme, attach);
                 }
             }
@@ -122,10 +134,11 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
             msg.setFrom(toInternetAddress(from, fromDisplayName));
 
             msg.setReplyTo(new Address[]{toInternetAddress(from, fromDisplayName)});
-            if (replyTo != null && !replyTo.isEmpty()) {
+
+            if (isNotBlank(replyTo)) {
                 msg.setReplyTo(new Address[]{toInternetAddress(replyTo, replyToDisplayName)});
             }
-            if (envelopeFrom != null && !envelopeFrom.isEmpty()) {
+            if (isNotBlank(envelopeFrom)) {
                 msg.setEnvelopeFrom(envelopeFrom);
             }
 
@@ -137,7 +150,9 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
 
             transport = session.getTransport("smtp");
             if (auth) {
-                transport.connect(config.get("user"), config.get("password"));
+		try (VaultStringSecret vaultStringSecret = this.session.vault().getStringSecret(config.get("password"))) {
+                    transport.connect(config.get("user"), vaultStringSecret.get().orElse(config.get("password")));
+                }
             } else {
                 transport.connect();
             }
@@ -150,7 +165,7 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
                 try {
                     transport.close();
                 } catch (MessagingException e) {
-                    log.warn("Failed to close transport", e);
+                    logger.warn("Failed to close transport", e);
                 }
             }
         }
@@ -179,8 +194,12 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
             props.put("mail.smtp.ssl.socketFactory", factory);
             if (configurator.getProvider().getPolicy() == HostnameVerificationPolicy.ANY) {
                 props.setProperty("mail.smtp.ssl.trust", "*");
+                props.put("mail.smtp.ssl.checkserveridentity", Boolean.FALSE.toString()); // this should be the default but seems to be impl specific, so set it explicitly just to be sure
             }
-        }
+            else {
+                props.put("mail.smtp.ssl.checkserveridentity", Boolean.TRUE.toString());
+            }
+        }	
     }
 
     @Override
@@ -188,19 +207,31 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
 
     }
 
+    private static String getSupportedSslProtocols() {
+        try {
+            String[] protocols = SSLContext.getDefault().getSupportedSSLParameters().getProtocols();
+            if (protocols != null) {
+                return String.join(" ", protocols);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to get list of supported SSL protocols", e);
+        }
+        return null;
+    }
+
     private void addAttachment(Multipart multipart, Theme theme, String path, String contentId) {
-        log.debug("addAttachment:" + path);
+        logger.debug("addAttachment:" + path);
 
         // Open stream twice so javax.mailer can get content type
         try {
           String fileName = new File(path).toPath().getFileName().toString();
-          log.debug("addAttachment filename:" + fileName + ", path: " + path);
+          logger.debug("addAttachment filename:" + fileName + ", path: " + path);
 
           InputStream is1 = theme.getResourceAsStream(path);
           InputStream is2 = theme.getResourceAsStream(path);
 
           if (is1 == null || is2 == null) {
-            log.warn("Attach stream is null: " + path);
+            logger.warn("Attach stream is null: " + path);
           } else {
             MimeBodyPart htmlPart = new MimeBodyPart();
             htmlPart.setDataHandler(new DataHandler(new InputStreamDataSource( is1, is2, fileName )));
@@ -211,7 +242,7 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
             multipart.addBodyPart(htmlPart);
           }
         } catch (MessagingException | IOException e) {
-            log.warn("Failed to attach file: " + path, e);
+            logger.warn("Failed to attach file: " + path, e);
         }
     }
 
@@ -223,10 +254,10 @@ public class EmailWithAttachmentSenderProvider implements EmailSenderProvider {
           if (path != null) {
               addAttachment(multipart, theme, path, contentId);
           } else {
-            log.warn("Propertie attach_" + contentId + " not found in theme");
+            logger.warn("Propertie attach_" + contentId + " not found in theme");
           }
         } catch (IOException e) {
-            log.warn("Failed to get theme properties", e);
+            logger.warn("Failed to get theme properties", e);
         }
     }
 }
