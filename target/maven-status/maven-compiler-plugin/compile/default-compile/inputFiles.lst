@@ -1,0 +1,3 @@
+/opt/agent-home/rh-sso-email-with-attachment/src/main/java/org/keycloak/email/EmailWithAttachmentSenderProviderFactory.java
+/opt/agent-home/rh-sso-email-with-attachment/src/main/java/org/keycloak/email/InputStreamDataSource.java
+/opt/agent-home/rh-sso-email-with-attachment/src/main/java/org/keycloak/email/EmailWithAttachmentSenderProvider.java

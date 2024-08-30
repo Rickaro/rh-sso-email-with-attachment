@@ -1,0 +1,3 @@
+org/keycloak/email/EmailWithAttachmentSenderProvider.class
+org/keycloak/email/InputStreamDataSource.class
+org/keycloak/email/EmailWithAttachmentSenderProviderFactory.class
